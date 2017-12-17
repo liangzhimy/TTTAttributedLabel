@@ -546,7 +546,7 @@ static inline CGSize CTFramesetterSuggestFrameSizeForAttributedStringWithConstra
     NSMutableAttributedString *mutableAttributedString = [self.attributedText mutableCopy];
 
     for (TTTAttributedLabelLink *link in links) {
-        if (link.attributes) {
+        if (link.attributes && !link.isTruncate) {
             [mutableAttributedString addAttributes:link.attributes range:link.result.range];
         }
     }
@@ -578,7 +578,6 @@ static inline CGSize CTFramesetterSuggestFrameSizeForAttributedStringWithConstra
                                                                          activeAttributes:activeAttributes
                                                                        inactiveAttributes:inactiveAttributes
                                                                        textCheckingResult:result];
-        
         [links addObject:link];
     }
     
@@ -627,6 +626,51 @@ static inline CGSize CTFramesetterSuggestFrameSizeForAttributedStringWithConstra
                                               withRange:(NSRange)range
 {
     return [self addLinkWithTextCheckingResult:[NSTextCheckingResult transitInformationCheckingResultWithRange:range components:components]];
+}
+
+#pragma mark - add truncate logic
+
+- (TTTAttributedLabelLink *)addLinkWithTextCheckingResult:(NSTextCheckingResult *)result
+                                               attributes:(NSDictionary *)attributes
+                                                 truncate:(BOOL)truncate
+{
+    return [self addLinksWithTextCheckingResults:@[result] attributes:attributes truncate:truncate].firstObject;
+}
+
+- (TTTAttributedLabelLink *)addLinkWithTextCheckingResult:(NSTextCheckingResult *)result truncate:(BOOL)truncate {
+    return [self addLinkWithTextCheckingResult:result attributes:self.linkAttributes truncate:truncate];
+}
+
+- (TTTAttributedLabelLink *)addLinkToURL:(NSURL *)url
+                               withRange:(NSRange)range
+                                truncate:(BOOL)truncate
+{
+    return [self addLinkWithTextCheckingResult:[NSTextCheckingResult linkCheckingResultWithRange:range URL:url] truncate:truncate];
+}
+
+- (NSArray *)addLinksWithTextCheckingResults:(NSArray *)results
+                                  attributes:(NSDictionary *)attributes
+                                    truncate:(BOOL)truncate
+{
+    NSMutableArray *links = [NSMutableArray array];
+    
+    for (NSTextCheckingResult *result in results) {
+        NSDictionary *activeAttributes = attributes ? self.activeLinkAttributes : nil;
+        NSDictionary *inactiveAttributes = attributes ? self.inactiveLinkAttributes : nil;
+        
+        TTTAttributedLabelLink *link = [[TTTAttributedLabelLink alloc] initWithAttributes:attributes
+                                                                         activeAttributes:activeAttributes
+                                                                       inactiveAttributes:inactiveAttributes
+                                                                       textCheckingResult:result];
+        if (truncate) {
+            link.truncate = YES;
+        }
+        [links addObject:link];
+    }
+    
+    [self addLinks:links];
+    
+    return links;
 }
 
 #pragma mark -
@@ -930,7 +974,7 @@ static inline CGSize CTFramesetterSuggestFrameSizeForAttributedStringWithConstra
 
                     }
                     
-                    [self addLinkToURL:[attributedTruncationString attribute:NSLinkAttributeName atIndex:0 effectiveRange:&linkRange] withRange:tokenLinkRange];
+                    [self addLinkToURL:[attributedTruncationString attribute:NSLinkAttributeName atIndex:0 effectiveRange:&linkRange] withRange:tokenLinkRange truncate:YES];
                 }
 
                 CFRelease(truncatedLine);
@@ -1175,7 +1219,7 @@ afterInheritingLabelAttributesAndConfiguringWithBlock:(NSMutableAttributedString
         }
 
         NSMutableAttributedString *mutableAttributedString = [self.inactiveAttributedText mutableCopy];
-        if (self.activeLink.result.range.length > 0 && NSLocationInRange(NSMaxRange(self.activeLink.result.range) - 1, NSMakeRange(0, [self.inactiveAttributedText length]))) {
+        if (self.activeLink.result.range.length > 0 && NSLocationInRange(NSMaxRange(self.activeLink.result.range) - 1, NSMakeRange(0, [self.inactiveAttributedText length])) && !self.activeLink.isTruncate) {
             [mutableAttributedString addAttributes:activeAttributes range:self.activeLink.result.range];
         }
 
@@ -1465,13 +1509,13 @@ afterInheritingLabelAttributesAndConfiguringWithBlock:(NSMutableAttributedString
         NSDictionary *attributesToAdd = isInactive ? link.inactiveAttributes : link.attributes;
         
         [attributesToRemove enumerateKeysAndObjectsUsingBlock:^(NSString *name, __unused id value, __unused BOOL *stop) {
-            if (NSMaxRange(link.result.range) <= mutableAttributedString.length) {
+            if (NSMaxRange(link.result.range) <= mutableAttributedString.length && !link.isTruncate) {
                 [mutableAttributedString removeAttribute:name range:link.result.range];
             }
         }];
 
         if (attributesToAdd) {
-            if (NSMaxRange(link.result.range) <= mutableAttributedString.length) {
+            if (NSMaxRange(link.result.range) <= mutableAttributedString.length && !link.isTruncate) {
                 [mutableAttributedString addAttributes:attributesToAdd range:link.result.range];
             }
         }

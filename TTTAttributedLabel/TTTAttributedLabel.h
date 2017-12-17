@@ -613,6 +613,8 @@ didLongPressLinkWithTextCheckingResult:(NSTextCheckingResult *)result
 
 typedef void (^TTTAttributedLabelLinkBlock) (TTTAttributedLabel *, TTTAttributedLabelLink *);
 
+@property (assign, nonatomic, getter=isTruncate) BOOL truncate;
+
 /**
  An `NSTextCheckingResult` representing the link's location and type.
  */
